@@ -1,0 +1,40 @@
+source:
+  # path to the local file or to the signed azure URL
+  filepath: /path/to/source/file
+  # options: segy, vds (not yet supported)
+  format: segy
+
+destination:
+  # name of storage account without suffix
+  storage_account_name: my_account
+  # which formats to upload. Required: yaml, vds. Optional: segy
+  formats:
+    - yaml
+    - segy
+    - vds
+
+metadata:
+  # field as in AD group permissions
+  field: Aquarium
+  # country as in AD group permissions
+  country: Norway
+  # field or country
+  # field: data would be available only to people with direct field access
+  # country: data available to people with country-wide access
+  security_classification: field
+  # 1. filename to use in metadata. If no provided, original filename would be used
+  # 2. container name would be the hash of this filename, so it must be unique
+  #    across storage account
+  # 3. note that using different filename for reupload will create a new
+  #    copy of the data in db and in storage account
+  filename: store_me_under_different_name
+
+# if exposed openvds options are not enough to correctly convert the file,
+# file must be uploaded directly through openvds (TODO: accept vds as a source)
+openvds:
+  # coordinate-reference system string
+  crs: ST_ED50_UTM31N_P23031_T1133
+  # (optional) compression. Default is RLE
+  compression: waveletlossless
+  # (optional) chunks size. Default is 64
+  chunk_size: 32

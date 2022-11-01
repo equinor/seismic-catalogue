@@ -1,0 +1,7 @@
+azure-identity
+azure-keyvault-secrets
+azure-storage-blob
+cerberus
+openvds
+psycopg[binary]
+pyyaml
