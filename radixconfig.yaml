@@ -1,0 +1,50 @@
+apiVersion: radix.equinor.com/v1
+kind: RadixApplication
+metadata:
+  name: seismic-catalogue
+spec:
+  environments:
+    - name: prod
+      build:
+        from: prod
+    - name: test
+      build:
+        from: test
+  components:
+    - name: server
+      src: api
+      dockerfileName: Dockerfile
+      secrets:
+        - AZURE_CLIENT_ID
+        - AZURE_CLIENT_SECRET
+        - AZURE_TENANT_ID
+        - AZURE_KEY_VAULT
+      ports:
+        - name: http
+          port: 8080
+      publicPort: http
+      environmentConfig:
+        - environment: prod
+          monitoring: false
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "100m"
+          horizontalScaling:
+            minReplicas: 1
+            maxReplicas: 2
+        - environment: test
+          monitoring: false
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "100m"
+          horizontalScaling:
+            minReplicas: 1
+            maxReplicas: 2
