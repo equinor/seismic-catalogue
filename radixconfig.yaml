@@ -24,27 +24,27 @@ spec:
           port: 8080
       publicPort: http
       environmentConfig:
-        - environment: prod
-          monitoring: false
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "100m"
-            limits:
-              memory: "256Mi"
-              cpu: "100m"
-          horizontalScaling:
-            minReplicas: 1
-            maxReplicas: 2
+        # - environment: prod
+        #   monitoring: false
+        #   resources:
+        #     requests:
+        #       memory: "256Mi"
+        #       cpu: "100m"
+        #     limits:
+        #       memory: "256Mi"
+        #       cpu: "100m"
+        #   horizontalScaling:
+        #     minReplicas: 1
+        #     maxReplicas: 2
         - environment: test
           monitoring: false
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: "2048Mi"
+              cpu: "500m"
             limits:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: "2048Mi"
+              cpu: "500m"
           horizontalScaling:
             minReplicas: 1
             maxReplicas: 2

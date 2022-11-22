@@ -23,6 +23,8 @@ type cubeResponse struct {
 
 type Request struct {
 	SasDuration uint `json:"sasDuration" example:"60"`
+	UseServicePrincipal bool `json:"useServicePrincipal"` // for speed comparison testing: if true - our service principal would be used
+	UseCachedServicePrincipalKey bool `json:"useCachedServicePrincipalKey"`
 }
 
 func makeContainerURL(storageAccount, container string) string {
@@ -50,6 +52,7 @@ func execRequest(
 	dbConnection database.Adapter,
 	sasProvider  auth.SasTokenProvider,
 ) {
+	start := time.Now()
 	access, err := getRolesClaim(ctx)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err)
@@ -62,7 +65,17 @@ func execRequest(
 		return
 	}
 
+	requestDuration := time.Since(start)
+	fmt.Println("Cubes received", requestDuration)
+
 	duration := time.Duration(request.SasDuration) * time.Minute
+	accessToken, accessTokenExists := ctx.Get("jwtAccessToken")
+	if !accessTokenExists {
+		ctx.AbortWithError(
+			http.StatusInternalServerError, 
+			errors.New("Access token is not found in protected API!"),
+		)
+	}
 
 	var response []cubeResponse
 	for _, cube := range cubes {
@@ -74,6 +87,9 @@ func execRequest(
 				cube.StorageAccount,
 				cube.Container,
 				duration,
+				request.UseServicePrincipal,
+				request.UseCachedServicePrincipalKey,
+				accessToken.(string),
 			)
 			if err != nil {
 				ctx.AbortWithError(http.StatusInternalServerError, err)
@@ -95,6 +111,9 @@ func execRequest(
 		ctx.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
+
+	requestDuration = time.Since(start)
+	fmt.Println("Full retrieval time", requestDuration)
 
 	ctx.Data(http.StatusOK, "application/json", doc)
 }

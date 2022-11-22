@@ -86,5 +86,6 @@ func NewJwtTokenValidator(
 		claims := token.(*validator.ValidatedClaims)
 		roles := claims.CustomClaims.(*rolesClaim)
 		ctx.Set("jwtRolesClaim", roles.Roles)
+		ctx.Set("jwtAccessToken", tokenString)
 	}
 }

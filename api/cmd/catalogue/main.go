@@ -117,6 +117,9 @@ func main() {
 	sasProvider := auth.NewUserDelegationSasProvider(
 		udcProvider,
 		time.Duration(24 * time.Hour),
+		opts.tenantId,
+		opts.clientId,
+		opts.clientSecret,
 	)
 
 	catalogue := api.NewCatalogueAPI(db, sasProvider)

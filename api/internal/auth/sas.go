@@ -19,6 +19,7 @@ type UdcProvider interface {
 	UserDelegationCredential(
 		string,
 		time.Duration,
+		bool,
 	) (service.UserDelegationCredential, error)
 }
 
@@ -94,18 +95,27 @@ func (u *udcCachingProvider) getNewUserDelegationCredential(
 func (u *udcCachingProvider) UserDelegationCredential(
 	account     string,
 	minValidity time.Duration,
+	useCachedServicePrincipalKey bool,
 ) (service.UserDelegationCredential, error) {
 	u.mutex.Lock()
 	defer u.mutex.Unlock()
 
 	udcShouldBeValidTo := time.Now().Add(minValidity).Add(10 * time.Second)
-	if cached, ok := u.cache[account]; ok {
-		if udcShouldBeValidTo.Before(cached.expiry) {
-			return cached.value, nil
+	if useCachedServicePrincipalKey {
+		if cached, ok := u.cache[account]; ok {
+			if udcShouldBeValidTo.Before(cached.expiry) {
+				return cached.value, nil
+			}
 		}
 	}
 
+	start := time.Now()
+
 	cacheEntry, err := u.getNewUserDelegationCredential(account, minValidity)
+
+	duration := time.Since(start)
+	fmt.Println("Retrieving UDK with service principal", duration)
+
 	if err != nil {
 		return service.UserDelegationCredential{}, err
 	}
@@ -127,7 +137,7 @@ func NewUdcCachingProvider(
 
 /** Interface for SAS token providers */
 type SasTokenProvider interface {
-	ContainerSas(string, string, time.Duration) (string, error)
+	ContainerSas(string, string, time.Duration, bool, bool, string) (string, error)
 }
 
 /** A user delegation SAS token provider
@@ -139,13 +149,21 @@ type SasTokenProvider interface {
 type userDelegationSasProvider struct {
 	udcProvider UdcProvider
 	maxDuration time.Duration
+	tenantID string
+	clientID string
+	clientSecret string
 }
 
 func (u userDelegationSasProvider) ContainerSas(
 	account   string,
 	container string,
 	duration  time.Duration,
+	useServicePrincipal bool,
+	useCachedServicePrincipalKey bool,
+	userAccessToken string,
 ) (string, error) {
+	start := time.Now()
+
 	if duration > u.maxDuration {
 		msg := fmt.Sprintf(
 			"Maximum sas-token duration is %s, (requested %s)",
@@ -155,38 +173,82 @@ func (u userDelegationSasProvider) ContainerSas(
 		return "", errors.New(msg)
 	}
 
-	udc, err := u.udcProvider.UserDelegationCredential(account, duration)
-	if err != nil {
-		return "", err
-	}
+	startTime := time.Now().UTC().Add(time.Second * -10)
+	expiryTime := time.Now().UTC().Add(duration)
 
-	/* The azure sdk is super fragile when it comes to signing sas tokens.
-	 * As of version 0.5.1 the only sas version that is correctly signed
-	 * is 2020-10-02, but this keeps changing from version to version.
-	 * E.g. in v0.5.0 only 2021-06-08 works correctly. Keep this in mind
-	 * in case sas signing breaks in the future.
-	 */
-	values, err := sas.BlobSignatureValues{
-		Version:       "2020-10-02",
-		Protocol:      sas.ProtocolHTTPS,
-		StartTime:     time.Now().UTC().Add(time.Second * -10),
-		ExpiryTime:    time.Now().UTC().Add(duration),
-		Permissions:   to.Ptr(sas.ContainerPermissions{ Read: true }).String(),
-		ContainerName: container,
-	}.SignWithUserDelegation(&udc)
-	if err != nil {
-		return "", err
-	}
+	// user probably must choose between speed of access and azure-assured-security
+	// we might cache service principal delegation keys or not. We might cache user ones
+
+	if !useServicePrincipal {
+		
+		oboToken, err := getStorageAccountOBOToken(userAccessToken, u.tenantID, u.clientID, u.clientSecret)
+		if err != nil {
+			return "", err
+		}
 	
-	return values.Encode(), nil
+		keyExpiry := time.Now().UTC().Add(duration)
+		keyStart  := time.Now().UTC().Add(-10 * time.Second)
+		keyInfo := service.KeyInfo{
+			Start:  to.Ptr( keyStart.Format(sas.TimeFormat)),
+			Expiry: to.Ptr(keyExpiry.Format(sas.TimeFormat)),
+		}
+		key, err := getUserDelegationKey(keyInfo, oboToken, account)
+		if err != nil {
+			return "", err
+		}
+
+		sas, err := signWithUserDelegation(key, account, container, startTime, expiryTime)
+		if err != nil {
+			return "", err
+		}
+
+		requestDuration := time.Since(start)
+		fmt.Println("Creating SAS with user flow: full time", requestDuration)
+		return sas, nil
+
+	} else {
+		udc, err := u.udcProvider.UserDelegationCredential(account, duration, useCachedServicePrincipalKey)
+		if err != nil {
+			return "", err
+		}
+	
+		/* The azure sdk is super fragile when it comes to signing sas tokens.
+		 * As of version 0.5.1 the only sas version that is correctly signed
+		 * is 2020-10-02, but this keeps changing from version to version.
+		 * E.g. in v0.5.0 only 2021-06-08 works correctly. Keep this in mind
+		 * in case sas signing breaks in the future.
+		 */
+		values, err := sas.BlobSignatureValues{
+			Version:       "2020-10-02",
+			Protocol:      sas.ProtocolHTTPS,
+			StartTime:     startTime,
+			ExpiryTime:    expiryTime,
+			Permissions:   to.Ptr(sas.ContainerPermissions{ Read: true }).String(),
+			ContainerName: container,
+		}.SignWithUserDelegation(&udc)
+		if err != nil {
+			return "", err
+		}
+
+		requestDuration := time.Since(start)
+		fmt.Println("Creating SAS with service principal flow: full time", requestDuration)
+		
+		return values.Encode(), nil
+	}
 }
 
 func NewUserDelegationSasProvider(
 	udcProvider UdcProvider,
 	maxDuration time.Duration,
+	tenantId string,
+	clientID string,
+	clientSecret string,
 ) userDelegationSasProvider {
 	return userDelegationSasProvider{
 		udcProvider: udcProvider,
 		maxDuration: maxDuration,
+		tenantID: tenantId,
+		clientID: clientID,
+		clientSecret: clientSecret,
 	}
 }
