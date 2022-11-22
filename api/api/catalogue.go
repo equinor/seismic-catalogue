@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/equinor/seismic-catalogue/api/internal/auth"
@@ -21,8 +21,31 @@ type cubeResponse struct {
 	Sas              string `json:"sas,omitempty"    example:"<sas>"`
 }
 
+// Definition of marshalling and unmarshalling needs local type
+type sasDuration time.Duration
+
+func (duration *sasDuration) UnmarshalJSON(b []byte) error {
+	var unmarshalledJson interface{}
+	if err := json.Unmarshal(b, &unmarshalledJson); err != nil {
+		return err
+	}
+
+	switch value := unmarshalledJson.(type) {
+	case string:
+		tmp, err := time.ParseDuration(value)
+		if err != nil {
+			return err
+		}
+		*duration = sasDuration(tmp)
+	default:
+		return fmt.Errorf("catalogue: cannot unmarshal duration of SAS token %#v into duration type that expects string", unmarshalledJson)
+	}
+
+	return nil
+}
+
 type Request struct {
-	SasDuration uint `json:"sasDuration" example:"60"`
+	SasDuration sasDuration `json:"sasDuration" example:"60m"`
 }
 
 func makeContainerURL(storageAccount, container string) string {
@@ -62,14 +85,14 @@ func execRequest(
 		return
 	}
 
-	duration := time.Duration(request.SasDuration) * time.Minute
+	duration := time.Duration(request.SasDuration)
 
 	var response []cubeResponse
 	for _, cube := range cubes {
 		containerURL := makeContainerURL(cube.StorageAccount, cube.Container)
 		
 		var sas string
-		if request.SasDuration != 0 {
+		if duration != time.Duration(0) {
 			sas, err = sasProvider.ContainerSas(
 				cube.StorageAccount,
 				cube.Container,
