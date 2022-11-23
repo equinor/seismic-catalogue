@@ -1,7 +1,7 @@
 apiVersion: radix.equinor.com/v1
 kind: RadixApplication
 metadata:
-  name: seismic-catalogue
+  name: oneseismic-catalogue-test
 spec:
   environments:
     - name: prod
