@@ -40,11 +40,11 @@ spec:
           monitoring: false
           resources:
             requests:
-              memory: "2048Mi"
-              cpu: "500m"
+              memory: "256Mi"
+              cpu: "100m"
             limits:
-              memory: "2048Mi"
-              cpu: "500m"
+              memory: "256Mi"
+              cpu: "100m"
           horizontalScaling:
             minReplicas: 1
             maxReplicas: 2
