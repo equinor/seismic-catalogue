@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/equinor/seismic-catalogue/api/internal/auth"
+	"github.com/equinor/seismic-catalogue/api/internal/auth/sas"
 	"github.com/equinor/seismic-catalogue/api/internal/database"
 )
 
@@ -56,30 +57,27 @@ func makeContainerURL(storageAccount, container string) string {
 	)
 }
 
-/* This helper simply aims at hiding the ugly lookup an cast needed to retrieve
- * values from the gin context
- */
-func getRolesClaim(ctx *gin.Context) ([]string, error) {
-	roles, exists := ctx.Get("jwtRolesClaim"); 
-	if !exists {
-		return []string{}, errors.New("expected to find roles claim")
+func getUser(ctx *gin.Context) (auth.User, error) {
+	user, userExists := ctx.Get("jwtUser")
+	if !userExists {
+		return auth.User{}, errors.New("user object not found in context")
 	}
-	return roles.([]string), nil
+	return user.(auth.User), nil
 }
 
 func execRequest(
 	ctx          *gin.Context,
 	request      Request,
 	dbConnection database.Adapter,
-	sasProvider  auth.SasTokenProvider,
+	sasProvider  sas.SasTokenProvider,
 ) {
-	access, err := getRolesClaim(ctx)
+	user, err := getUser(ctx)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 
-	cubes, err := dbConnection.GetCubes(access)
+	cubes, err := dbConnection.GetCubes(user.Roles)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -97,6 +95,7 @@ func execRequest(
 				cube.StorageAccount,
 				cube.Container,
 				duration,
+				user,
 			)
 			if err != nil {
 				ctx.AbortWithError(http.StatusInternalServerError, err)

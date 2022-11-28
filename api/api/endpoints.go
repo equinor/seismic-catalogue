@@ -3,17 +3,17 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	
+
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 
-	"github.com/equinor/seismic-catalogue/api/internal/auth"
+	"github.com/equinor/seismic-catalogue/api/internal/auth/sas"
 	"github.com/equinor/seismic-catalogue/api/internal/database"
 )
 
 type CatalogueAPI struct {
 	dbConnection database.Adapter
-	sasProvider  auth.SasTokenProvider
+	sasProvider  sas.SasTokenProvider
 }
 
 func (c *CatalogueAPI) Post(ctx *gin.Context) {
@@ -44,7 +44,7 @@ func (c *CatalogueAPI) Get(ctx *gin.Context) {
 
 func NewCatalogueAPI(
 	dbConnection database.Adapter,
-	sasProvider  auth.SasTokenProvider,
+	sasProvider sas.SasTokenProvider,
 ) *CatalogueAPI {
-	return &CatalogueAPI{ dbConnection: dbConnection, sasProvider: sasProvider }
+	return &CatalogueAPI{dbConnection: dbConnection, sasProvider: sasProvider}
 }

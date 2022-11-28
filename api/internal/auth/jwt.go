@@ -1,6 +1,5 @@
 package auth
 
-
 import (
 	"context"
 	"log"
@@ -23,19 +22,19 @@ func NewJwksProvider(issuer string) *jwkeyset.CachingProvider {
 	return jwkeyset.NewCachingProvider(issuerURL, 60*time.Minute)
 }
 
-
-/** Custom claims expected to be present in the JWT token */
-type rolesClaim struct {
-	Roles []string `json:"roles"`
+type User struct {
+	AccessToken string
+	OID         string   `json:"oid"`
+	Roles       []string `json:"roles"`
 }
 
 /** Custom validation of roles claim
- * 
+ *
  * Nothing to validate. There are no hard requirements on which roles should be
  * present. The purpose of the roles claim is to filter queries to the
  * backend, which is dealt with elsewhere.
  */
-func (r *rolesClaim) Validate(ctx context.Context) error {
+func (r *User) Validate(ctx context.Context) error {
 	return nil
 }
 
@@ -47,12 +46,12 @@ func (r *rolesClaim) Validate(ctx context.Context) error {
  * not present "jwtRolesClaim" will be set to []string{}
  */
 func NewJwtTokenValidator(
-	issuer   string,
+	issuer string,
 	audience string,
-	keyFunc  func(context.Context) (interface{}, error),
+	keyFunc func(context.Context) (interface{}, error),
 ) gin.HandlerFunc {
 	rClaim := func() validator.CustomClaims {
-		return &rolesClaim{}
+		return &User{}
 	}
 
 	jwtValidator, err := validator.New(
@@ -67,7 +66,7 @@ func NewJwtTokenValidator(
 		log.Fatalf("failed to setup JWT validator: %v", err)
 	}
 
-	return func (ctx *gin.Context) {
+	return func(ctx *gin.Context) {
 		tokenString, err := jwtmiddleware.AuthHeaderTokenExtractor(ctx.Request)
 		if err != nil {
 			ctx.AbortWithStatus(http.StatusUnauthorized)
@@ -84,7 +83,8 @@ func NewJwtTokenValidator(
 		}
 
 		claims := token.(*validator.ValidatedClaims)
-		roles := claims.CustomClaims.(*rolesClaim)
-		ctx.Set("jwtRolesClaim", roles.Roles)
+		user := claims.CustomClaims.(*User)
+		user.AccessToken = tokenString
+		ctx.Set("jwtUser", *user)
 	}
 }

@@ -6,12 +6,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/pborman/getopt/v2"
-	"github.com/gin-gonic/gin"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/gin-gonic/gin"
+	"github.com/pborman/getopt/v2"
 
 	"github.com/equinor/seismic-catalogue/api/api"
 	"github.com/equinor/seismic-catalogue/api/internal/auth"
+	"github.com/equinor/seismic-catalogue/api/internal/auth/sas"
 	"github.com/equinor/seismic-catalogue/api/internal/postgres"
 )
 
@@ -110,11 +111,13 @@ func main() {
 	}
 	defer db.Close()
 	
-	udcProvider := auth.NewUdcCachingProvider(
-		servicePrincipal,
+	udcProvider := sas.NewUdcCachingProvider(
+		opts.tenantId,
+		opts.clientId,
+		opts.clientSecret,
 		time.Duration(7 * 24 * time.Hour),
 	)
-	sasProvider := auth.NewUserDelegationSasProvider(
+	sasProvider := sas.NewUserDelegationSasProvider(
 		udcProvider,
 		time.Duration(24 * time.Hour),
 	)
